@@ -116,13 +116,14 @@ class SaleController extends Controller
 
             'notes'                => 'nullable|string',
 
-            // datos de pago opcionales
+              // datos de pago opcionales
             'register_payment'  => ['nullable', 'boolean'],
-            'payment_date'      => ['required_if:register_payment,1', 'date'],
-            'payment_amount'    => ['required_if:register_payment,1', 'numeric', 'min:0.01'],
+            'payment_date'      => ['nullable', 'date'],
+            'payment_amount'    => ['nullable', 'numeric', 'min:0'],
             'payment_method'    => ['nullable', 'string', 'max:30'],
             'payment_reference' => ['nullable', 'string', 'max:191'],
             'payment_notes'     => ['nullable', 'string'],
+
         ]);
 
         // 2) Regla extra: total > 0
@@ -207,23 +208,30 @@ class SaleController extends Controller
             }
 
             // Pago inicial opcional
-            if (!empty($data['register_payment']) && !empty($data['payment_amount'])) {
+            if (!empty($data['register_payment']) && $data['payment_amount'] !== null) {
                 $amount = (float) $data['payment_amount'];
-                if ($amount > $sale->total + 0.01) {
-                    throw new \Exception('El monto del pago inicial no puede ser mayor al total de la venta.');
+
+                if ($amount <= 0) {
+                    // no creamos pago, pero seguimos normal
+                } else {
+                    if ($amount > $sale->total + 0.01) {
+                        throw new \Exception('El monto del pago inicial no puede ser mayor al total de la venta.');
+                    }
+
+                    \App\Models\Payment::create([
+                        'sale_id'      => $sale->id,
+                        'payment_date' => $data['payment_date'] ?? now()->toDateString(),
+                        'amount'       => $amount,
+                        'method'       => $data['payment_method'] ?? null,
+                        'reference'    => $data['payment_reference'] ?? null,
+                        'notes'        => $data['payment_notes'] ?? null,
+                    ]);
+
+                    $sale->refreshPaymentStatus();
                 }
-
-                \App\Models\Payment::create([
-                    'sale_id'      => $sale->id,
-                    'payment_date' => $data['payment_date'],
-                    'amount'       => $amount,
-                    'method'       => $data['payment_method'] ?? null,
-                    'reference'    => $data['payment_reference'] ?? null,
-                    'notes'        => $data['payment_notes'] ?? null,
-                ]);
-
-                $sale->refreshPaymentStatus();
             }
+
+
 
             return redirect()
                 ->route('sales.show', $sale)
@@ -380,5 +388,31 @@ class SaleController extends Controller
 
         return $pdf->stream($fileName);
     }
+
+
+    public function destroy(Sale $sale)
+{
+    DB::transaction(function () use ($sale) {
+        // Borrar pagos relacionados (si existe la relación payments)
+        if (method_exists($sale, 'payments')) {
+            $sale->payments()->delete();
+        }
+
+        // Borrar ítems relacionados (detalle de la venta)
+        if (method_exists($sale, 'items')) {
+            $sale->items()->delete();
+        }
+
+        // Finalmente borrar la venta
+        $sale->delete();
+    });
+
+    return redirect()
+        ->route('sales.index')
+        ->with('success', 'Venta eliminada correctamente.');
+}
+
+
+
 
 }

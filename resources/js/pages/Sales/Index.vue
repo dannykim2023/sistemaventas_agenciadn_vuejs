@@ -135,11 +135,10 @@ const columns = [
   { key: 'status', label: 'Estado' },
   { key: 'pdf',    label: 'Contrato PDF' }, // 👈 nuevo
 ]
-
 const rowActions = [
   { key: 'view', label: 'Ver detalle' },
   { key: 'edit', label: 'Editar' },
-  // luego puedes agregar "delete", "anular", etc.
+  { key: 'delete', label: 'Eliminar', variant: 'danger' as const },
 ]
 
 // viene del menú de acciones (⋮) del BaseTable
@@ -153,11 +152,22 @@ function onRowAction(payload: { action: string; row: any }) {
   if (action === 'edit') {
     router.get(`/sales/${row.id}/edit`)
   }
+
   if (action === 'pdf') {
-    // Abre en nueva pestaña la ruta del PDF
     window.open(`/sales/${row.id}/pdf`, '_blank', 'noopener')
   }
+
+  if (action === 'delete') {
+    if (!confirm('¿Seguro que deseas eliminar esta venta? Esta acción no se puede deshacer.')) {
+      return
+    }
+
+    router.delete(`/sales/${row.id}`, {
+      preserveScroll: true,
+    })
+  }
 }
+
 </script>
 
 <template>
@@ -259,7 +269,7 @@ function onRowAction(payload: { action: string; row: any }) {
             total: props.sales.total,
           }"
           :actions="rowActions"
-          search-placeholder="Buscar por número o cliente"
+          search-placeholder="Buscar por número o cliente" 
           @filter="handleFilter"
           @change-page="goToPage"
           @action="onRowAction"
@@ -291,7 +301,7 @@ function onRowAction(payload: { action: string; row: any }) {
             {{ row.issue_date }}
           </template>
 
-          <<!-- Total -->
+          <!-- Total -->
           <template #cell-total="{ row }">
             {{ formatMoney(row.total, row.currency) }}
           </template>

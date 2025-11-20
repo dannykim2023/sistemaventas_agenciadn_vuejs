@@ -55,3 +55,6 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 
 Route::get('/sales/{sale}/pdf', [SaleController::class, 'pdf'])
     ->name('sales.pdf');
+
+    
+Route::resource('sales', SaleController::class);
